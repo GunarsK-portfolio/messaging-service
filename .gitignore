@@ -6,23 +6,41 @@ bin/
 *.so
 *.dylib
 
-# Test coverage
-coverage.out
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
 coverage.html
 
-# Security reports
-gosec-report.json
+# Dependency directories
+vendor/
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+*~
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Environment
+# Environment files
 .env
 .env.local
+.env.*.local
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Build artifacts
+dist/
+tmp/
+
+# Logs
+*.log
+logs/
