@@ -1,0 +1,150 @@
+# Go Service Deployment Template
+# Copy this to Go service repos: auth-service, admin-api, public-api, files-api
+
+name: Deploy to AWS
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+  security-events: write
+
+env:
+  AWS_REGION: eu-west-1
+  ECR_REPOSITORY: portfolio/${{ github.event.repository.name }}
+  APP_RUNNER_SERVICE: portfolio-prod-${{ github.event.repository.name }}
+
+jobs:
+  deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "version=manual-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ steps.version.outputs.version }}
+        run: |
+          docker build \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            .
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.version.outputs.version }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Push Docker image to ECR
+        if: success()
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ steps.version.outputs.version }}
+        run: |
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: Get Service ARN
+        id: service-arn
+        if: success()
+        run: |
+          SERVICE_ARN=$(aws apprunner list-services \
+            --region ${{ env.AWS_REGION }} \
+            --query "ServiceSummaryList[?ServiceName=='$APP_RUNNER_SERVICE'].ServiceArn" \
+            --output text)
+
+          if [ -z "$SERVICE_ARN" ]; then
+            echo "Service not found: $APP_RUNNER_SERVICE"
+            exit 1
+          fi
+
+          echo "arn=$SERVICE_ARN" >> $GITHUB_OUTPUT
+
+      - name: Update App Runner service with new image
+        if: success()
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ steps.version.outputs.version }}
+        run: |
+          # Get current service configuration to preserve settings
+          CURRENT_CONFIG=$(aws apprunner describe-service \
+            --region ${{ env.AWS_REGION }} \
+            --service-arn ${{ steps.service-arn.outputs.arn }} \
+            --query 'Service.SourceConfiguration' \
+            --output json)
+
+          # Update only the ImageIdentifier while preserving other settings
+          UPDATED_CONFIG=$(echo "$CURRENT_CONFIG" | jq \
+            ".ImageRepository.ImageIdentifier=\"$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG\"")
+
+          aws apprunner update-service \
+            --region ${{ env.AWS_REGION }} \
+            --service-arn ${{ steps.service-arn.outputs.arn }} \
+            --source-configuration "$UPDATED_CONFIG"
+          echo "Deployment triggered for $APP_RUNNER_SERVICE with image tag $IMAGE_TAG"
+
+      - name: Wait for deployment
+        if: success()
+        run: |
+          echo "Waiting for deployment to complete..."
+          SERVICE_ARN="${{ steps.service-arn.outputs.arn }}"
+          MAX_ATTEMPTS=60
+          ATTEMPT=0
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            STATUS=$(aws apprunner describe-service \
+              --region ${{ env.AWS_REGION }} \
+              --service-arn "$SERVICE_ARN" \
+              --query 'Service.Status' \
+              --output text)
+            echo "Attempt $((ATTEMPT + 1))/$MAX_ATTEMPTS: Status = $STATUS"
+            if [ "$STATUS" = "RUNNING" ]; then
+              echo "Deployment completed successfully"
+              exit 0
+            elif [ "$STATUS" = "CREATE_FAILED" ] || [ "$STATUS" = "DELETE_FAILED" ] || [ "$STATUS" = "UPDATE_FAILED" ] || [ "$STATUS" = "DELETED" ]; then
+              echo "Deployment failed with status: $STATUS"
+              exit 1
+            fi
+            # OPERATION_IN_PROGRESS, PAUSED, or other transient states - continue waiting
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 10
+          done
+          echo "Timeout waiting for deployment"
+          exit 1
