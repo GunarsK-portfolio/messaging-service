@@ -4,12 +4,19 @@ import (
 	common "github.com/GunarsK-portfolio/portfolio-common/config"
 )
 
-// SESConfig holds AWS SES email configuration
+// SESConfig holds AWS SES email configuration.
+//
+// Credential handling:
+//   - LocalStack (development): Set SES_ENDPOINT and provide AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY
+//   - AWS (production): Leave credentials empty to use IAM role-based authentication
+//     (EC2 instance profile, ECS task role, or IRSA for EKS)
+//
+// Never commit real AWS credentials. Use environment variables or secrets manager.
 type SESConfig struct {
 	Region      string `validate:"required"`
-	Endpoint    string // Optional: LocalStack endpoint for local development
-	AccessKey   string // Optional: required for LocalStack, empty for AWS IAM role auth
-	SecretKey   string // Optional: required for LocalStack, empty for AWS IAM role auth
+	Endpoint    string // Optional: LocalStack endpoint (e.g., http://localhost:4566) for local dev
+	AccessKey   string // Optional: AWS_ACCESS_KEY_ID - required for LocalStack, omit for IAM roles
+	SecretKey   string // Optional: AWS_SECRET_ACCESS_KEY - required for LocalStack, omit for IAM roles
 	SenderEmail string `validate:"required,email"`
 }
 

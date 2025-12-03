@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/GunarsK-portfolio/portfolio-common/models"
@@ -45,6 +47,7 @@ func TestProcess_Success(t *testing.T) {
 	var updatedStatus string
 	var emailsSent []string
 	var deliveryAttempts []*models.DeliveryAttempt
+	var mu sync.Mutex
 
 	mockRepo := &mockRepository{
 		getContactMessageByIDFunc: func(_ context.Context, id int64) (*models.ContactMessage, error) {
@@ -61,13 +64,17 @@ func TestProcess_Success(t *testing.T) {
 			return nil
 		},
 		createDeliveryAttemptFunc: func(_ context.Context, attempt *models.DeliveryAttempt) error {
+			mu.Lock()
 			deliveryAttempts = append(deliveryAttempts, attempt)
+			mu.Unlock()
 			return nil
 		},
 	}
 	mockEmail := &mockEmailClient{
 		sendEmailFunc: func(_ context.Context, to, _, _ string) error {
+			mu.Lock()
 			emailsSent = append(emailsSent, to)
+			mu.Unlock()
 			return nil
 		},
 	}
@@ -293,6 +300,7 @@ func TestProcess_AllEmailsFail(t *testing.T) {
 	var updatedStatus string
 	var lastError *string
 	var deliveryAttempts []*models.DeliveryAttempt
+	var mu sync.Mutex
 
 	mockRepo := &mockRepository{
 		getContactMessageByIDFunc: func(_ context.Context, _ int64) (*models.ContactMessage, error) {
@@ -307,7 +315,9 @@ func TestProcess_AllEmailsFail(t *testing.T) {
 			return nil
 		},
 		createDeliveryAttemptFunc: func(_ context.Context, attempt *models.DeliveryAttempt) error {
+			mu.Lock()
 			deliveryAttempts = append(deliveryAttempts, attempt)
+			mu.Unlock()
 			return nil
 		},
 	}
@@ -348,7 +358,8 @@ func TestProcess_PartialEmailFailure(t *testing.T) {
 	message := createTestContactMessage()
 	recipients := createTestRecipients()
 	var updatedStatus string
-	emailAttempts := 0
+	var emailAttempts int
+	var mu sync.Mutex
 
 	mockRepo := &mockRepository{
 		getContactMessageByIDFunc: func(_ context.Context, _ int64) (*models.ContactMessage, error) {
@@ -367,9 +378,12 @@ func TestProcess_PartialEmailFailure(t *testing.T) {
 	}
 	mockEmail := &mockEmailClient{
 		sendEmailFunc: func(_ context.Context, to, _, _ string) error {
+			mu.Lock()
 			emailAttempts++
+			attempt := emailAttempts
+			mu.Unlock()
 			// First email succeeds, second fails
-			if emailAttempts == 1 {
+			if attempt == 1 {
 				return nil
 			}
 			return errors.New("SES error")
@@ -699,14 +713,5 @@ func TestFormatEmailBody_ContainsAllFields(t *testing.T) {
 // =============================================================================
 
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
-}
-
-func containsHelper(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
+	return strings.Contains(s, substr)
 }

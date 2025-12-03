@@ -1,5 +1,5 @@
 # Codecov configuration
-# Only measure coverage for service (where tests exist)
+# Only measure coverage for testable business logic
 
 coverage:
   status:

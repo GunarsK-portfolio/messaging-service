@@ -92,10 +92,7 @@ func main() {
 		appLogger.Error("Failed to create SES client", "error", err)
 		os.Exit(1)
 	}
-	appLogger.Info("SES email client created",
-		"region", cfg.SES.Region,
-		"localstack", cfg.SES.IsLocalStack(),
-	)
+	appLogger.Info("SES email client created")
 
 	// Repository and handler
 	repo := repository.New(db)

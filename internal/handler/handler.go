@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/GunarsK-portfolio/portfolio-common/logger"
@@ -14,6 +15,9 @@ import (
 	"github.com/GunarsK-portfolio/messaging-service/internal/email"
 	"github.com/GunarsK-portfolio/messaging-service/internal/repository"
 )
+
+// maxConcurrentEmails limits parallel email sending to avoid overwhelming SES
+const maxConcurrentEmails = 5
 
 // Handler processes contact message events from the queue
 type Handler struct {
@@ -39,7 +43,7 @@ func (h *Handler) Process(ctx context.Context, delivery amqp.Delivery) error {
 	// Parse the event
 	var event models.ContactMessageEvent
 	if err := json.Unmarshal(delivery.Body, &event); err != nil {
-		log.Error("Failed to unmarshal event", "error", err, "body", string(delivery.Body))
+		log.Error("Failed to unmarshal event", "error", err, "bodyLength", len(delivery.Body))
 		return fmt.Errorf("unmarshal event: %w", err)
 	}
 
@@ -69,24 +73,51 @@ func (h *Handler) Process(ctx context.Context, delivery amqp.Delivery) error {
 	if len(recipients) == 0 {
 		log.Warn("No active recipients configured")
 		errMsg := "no active recipients configured"
-		_ = h.repo.UpdateMessageStatus(ctx, event.MessageID, models.MessageStatusFailed, &errMsg)
+		if err := h.repo.UpdateMessageStatus(ctx, event.MessageID, models.MessageStatusFailed, &errMsg); err != nil {
+			log.Error("Failed to update message status to failed", "error", err)
+		}
 		return fmt.Errorf("no active recipients")
 	}
 
-	// Send email to each recipient
+	// Send email to each recipient with bounded concurrency
 	subject := fmt.Sprintf("Contact Form: %s", message.Subject)
 	body := h.formatEmailBody(message)
+
+	type result struct {
+		recipient string
+		err       error
+	}
+
+	var (
+		wg          sync.WaitGroup
+		resultsChan = make(chan result, len(recipients))
+		semaphore   = make(chan struct{}, maxConcurrentEmails)
+	)
+
+	for _, recipient := range recipients {
+		wg.Add(1)
+		go func(r models.Recipient) {
+			defer wg.Done()
+			semaphore <- struct{}{}        // Acquire
+			defer func() { <-semaphore }() // Release
+
+			err := h.sendToRecipient(ctx, log, message, r, subject, body)
+			resultsChan <- result{recipient: r.Email, err: err}
+		}(recipient)
+	}
+
+	wg.Wait()
+	close(resultsChan)
 
 	var lastErr error
 	successCount := 0
 
-	for _, recipient := range recipients {
-		err := h.sendToRecipient(ctx, log, message, recipient, subject, body)
-		if err != nil {
-			lastErr = err
+	for res := range resultsChan {
+		if res.err != nil {
+			lastErr = res.err
 			log.Error("Failed to send to recipient",
-				"recipient", recipient.Email,
-				"error", err,
+				"recipient", res.recipient,
+				"error", res.err,
 			)
 		} else {
 			successCount++
@@ -120,7 +151,7 @@ func (h *Handler) sendToRecipient(ctx context.Context, log *slog.Logger, message
 		MessageID:      message.ID,
 		RecipientEmail: recipient.Email,
 		Status:         models.DeliveryStatusPending,
-		AttemptedAt:    time.Now(),
+		AttemptedAt:    time.Now().UTC(),
 	}
 
 	err := h.emailClient.SendEmail(ctx, recipient.Email, subject, body)

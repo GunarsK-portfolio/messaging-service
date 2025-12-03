@@ -38,8 +38,10 @@ USER app
 
 # No EXPOSE - worker has no HTTP server
 
-# No HEALTHCHECK - worker doesn't have HTTP endpoint
-# Health is monitored via RabbitMQ connection status and logs
+# Basic healthcheck - verify process is running
+# For queue workers, actual health is monitored via RabbitMQ connection and logs
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD pgrep -x worker || exit 1
 
 # Run the binary
 CMD ["./worker"]

@@ -62,7 +62,7 @@ jobs:
         if: github.event_name == 'push'
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          file: ./coverage.out
+          files: ./coverage.out
           fail_ci_if_error: false # Don't fail if codecov is unavailable
         continue-on-error: true
 

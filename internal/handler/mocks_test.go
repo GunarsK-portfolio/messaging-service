@@ -2,8 +2,8 @@ package handler
 
 import (
 	"context"
+	"io"
 	"log/slog"
-	"os"
 	"time"
 
 	"github.com/GunarsK-portfolio/messaging-service/internal/email"
@@ -76,7 +76,7 @@ var _ email.Client = (*mockEmailClient)(nil)
 // =============================================================================
 
 func createTestLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	return slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 }
 
 func createTestContactMessage() *models.ContactMessage {

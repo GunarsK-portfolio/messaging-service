@@ -22,6 +22,9 @@ type SESClient struct {
 	fromEmail string
 }
 
+// Compile-time interface assertion
+var _ Client = (*SESClient)(nil)
+
 // Config holds SES client configuration
 type Config struct {
 	Region    string
@@ -33,6 +36,14 @@ type Config struct {
 
 // NewSESClient creates a new SES email client
 func NewSESClient(ctx context.Context, cfg Config) (*SESClient, error) {
+	// Validate required configuration
+	if cfg.Region == "" {
+		return nil, fmt.Errorf("region is required")
+	}
+	if cfg.FromEmail == "" {
+		return nil, fmt.Errorf("from email is required")
+	}
+
 	var opts []func(*config.LoadOptions) error
 	opts = append(opts, config.WithRegion(cfg.Region))
 
@@ -63,6 +74,14 @@ func NewSESClient(ctx context.Context, cfg Config) (*SESClient, error) {
 
 // SendEmail sends an email via SES
 func (c *SESClient) SendEmail(ctx context.Context, to, subject, body string) error {
+	// Validate inputs for clearer error messages
+	if to == "" {
+		return fmt.Errorf("recipient email address is required")
+	}
+	if subject == "" {
+		return fmt.Errorf("email subject is required")
+	}
+
 	input := &ses.SendEmailInput{
 		Source: aws.String(c.fromEmail),
 		Destination: &types.Destination{

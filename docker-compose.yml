@@ -30,6 +30,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      localstack:
+        condition: service_healthy
 
   postgres:
     image: postgres:17-alpine
@@ -64,15 +66,33 @@ services:
       retries: 5
       start_period: 30s
 
+  # LocalStack (AWS SES emulation for local development)
   localstack:
-    image: localstack/localstack:latest
+    image: localstack/localstack:4.11
+    container_name: localstack
+    restart: unless-stopped
     environment:
-      - SERVICES=ses
-      - DEBUG=0
+      SERVICES: ses
+      DEBUG: 0
+      AWS_DEFAULT_REGION: ${AWS_REGION:-eu-north-1}
     ports:
-      - "4566:4566"
+      - "127.0.0.1:4566:4566"
     volumes:
       - localstack_data:/var/lib/localstack
+      - ./docker/localstack:/etc/localstack/init/ready.d:ro
+    networks:
+      - network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
 
 volumes:
   postgres_data:

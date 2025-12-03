@@ -28,11 +28,19 @@ func Load() *Config {
 		panic(fmt.Sprintf("Invalid SES configuration: %v", err))
 	}
 
-	// Validate credentials are provided as a pair (both or neither)
+	// Validate credentials configuration
 	hasAccessKey := cfg.SES.AccessKey != ""
 	hasSecretKey := cfg.SES.SecretKey != ""
+	hasEndpoint := cfg.SES.Endpoint != ""
+
+	// Credentials must be provided as a pair (both or neither)
 	if hasAccessKey != hasSecretKey {
 		panic("AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY must both be provided or both be empty")
+	}
+
+	// LocalStack requires explicit credentials
+	if hasEndpoint && !hasAccessKey {
+		panic("AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are required when using SES_ENDPOINT (LocalStack)")
 	}
 
 	return cfg

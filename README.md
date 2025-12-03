@@ -56,10 +56,11 @@ docker-compose up -d messaging-service
 
 ### Local Development
 
-1. Copy environment file:
+1. Copy and configure environment file:
 
 ```bash
 cp .env.example .env
+# Edit .env with your local settings (DB credentials, RabbitMQ, etc.)
 ```
 
 1. Start infrastructure (if not running):
@@ -141,10 +142,18 @@ go test ./...                                 # Test
 | `RABBITMQ_PREFETCH_COUNT` | Prefetch count | `1` |
 | `RABBITMQ_CONSUMER_TAG` | Consumer tag | `messaging-service` |
 | `AWS_REGION` | AWS region | `eu-north-1` |
-| `SES_ENDPOINT` | SES endpoint (LocalStack) | - |
-| `AWS_ACCESS_KEY_ID` | AWS access key | - |
-| `AWS_SECRET_ACCESS_KEY` | AWS secret key | - |
+| `SES_ENDPOINT` | SES endpoint (LocalStack only) | - |
+| `AWS_ACCESS_KEY_ID` | AWS access key (LocalStack only) | - |
+| `AWS_SECRET_ACCESS_KEY` | AWS secret key (LocalStack only) | - |
 | `SES_SENDER_EMAIL` | Sender email address | **required** |
+
+### AWS Credentials
+
+- **Local development**: Set `SES_ENDPOINT` to LocalStack URL and provide
+  `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` (any value works with LocalStack)
+- **Production**: Leave `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` empty.
+  The SDK will automatically use IAM role credentials (EC2 instance profile,
+  ECS task role, or IRSA for EKS)
 
 ## Message Flow
 
@@ -156,7 +165,9 @@ go test ./...                                 # Test
 6. Records delivery attempt for idempotency
 7. Updates message status (sent/failed)
 
-On failure, message is retried with exponential backoff until max retries.
+On failure, message is retried with exponential backoff (configurable via
+`RABBITMQ_RETRY_DELAYS`). After exhausting all retries, the message is moved to
+a dead-letter queue for manual inspection.
 
 ## Integration
 
