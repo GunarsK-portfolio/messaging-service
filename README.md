@@ -121,31 +121,7 @@ go test ./...                                 # Test
 
 ## Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `ENVIRONMENT` | Environment type | `development` |
-| `LOG_LEVEL` | Log level | `debug` |
-| `LOG_FORMAT` | Log format (text/json) | `text` |
-| `DB_HOST` | PostgreSQL host | `localhost` |
-| `DB_PORT` | PostgreSQL port | `5432` |
-| `DB_USER` | Database user | - |
-| `DB_PASSWORD` | Database password | - |
-| `DB_NAME` | Database name | `portfolio` |
-| `DB_SSL_MODE` | PostgreSQL SSL mode | `disable` |
-| `RABBITMQ_HOST` | RabbitMQ host | `localhost` |
-| `RABBITMQ_PORT` | RabbitMQ port | `5672` |
-| `RABBITMQ_USER` | RabbitMQ user | - |
-| `RABBITMQ_PASSWORD` | RabbitMQ password | - |
-| `RABBITMQ_EXCHANGE` | Exchange name | `contact_messages` |
-| `RABBITMQ_QUEUE` | Queue name | `contact_messages` |
-| `RABBITMQ_RETRY_DELAYS` | Retry delays | `1m,5m,30m,2h,12h` |
-| `RABBITMQ_PREFETCH_COUNT` | Prefetch count | `1` |
-| `RABBITMQ_CONSUMER_TAG` | Consumer tag | `messaging-service` |
-| `AWS_REGION` | AWS region | `eu-north-1` |
-| `SES_ENDPOINT` | SES endpoint (LocalStack only) | - |
-| `AWS_ACCESS_KEY_ID` | AWS access key (LocalStack only) | - |
-| `AWS_SECRET_ACCESS_KEY` | AWS secret key (LocalStack only) | - |
-| `SES_SENDER_EMAIL` | Sender email address | **required** |
+See [.env.example](.env.example) for all available configuration options.
 
 ### AWS Credentials
 
