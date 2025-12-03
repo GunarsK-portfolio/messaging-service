@@ -612,13 +612,13 @@ func TestProcess_EmailContentFormat(t *testing.T) {
 	if sentBody == "" {
 		t.Error("expected body to be non-empty")
 	}
-	if !contains(sentBody, "Test User") {
+	if !strings.Contains(sentBody, "Test User") {
 		t.Error("expected body to contain sender name")
 	}
-	if !contains(sentBody, "testuser@example.com") {
+	if !strings.Contains(sentBody, "testuser@example.com") {
 		t.Error("expected body to contain sender email")
 	}
-	if !contains(sentBody, "This is the message body") {
+	if !strings.Contains(sentBody, "This is the message body") {
 		t.Error("expected body to contain message content")
 	}
 }
@@ -702,16 +702,8 @@ func TestFormatEmailBody_ContainsAllFields(t *testing.T) {
 	}
 
 	for _, check := range checks {
-		if !contains(body, check.expected) {
+		if !strings.Contains(body, check.expected) {
 			t.Errorf("expected body to contain %s (%q)", check.name, check.expected)
 		}
 	}
-}
-
-// =============================================================================
-// Helper Functions
-// =============================================================================
-
-func contains(s, substr string) bool {
-	return strings.Contains(s, substr)
 }
