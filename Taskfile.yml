@@ -1,0 +1,130 @@
+version: '3'
+
+tasks:
+  # Top-level tasks
+  run:
+    desc: Run the messaging worker locally
+    cmds:
+      - go run cmd/worker/main.go
+
+  build:
+    desc: Build the messaging worker binary
+    cmds:
+      - go build -o bin/messaging-service cmd/worker/main.go
+
+  test:
+    desc: Run tests
+    cmds:
+      - go test -v ./...
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - cmd: rm -rf bin/ coverage.out coverage.html gosec-report.json
+        platforms: [linux, darwin]
+      - cmd: if exist bin rmdir /s /q bin
+        platforms: [windows]
+        ignore_error: true
+      - cmd: if exist coverage.out del coverage.out
+        platforms: [windows]
+        ignore_error: true
+      - cmd: if exist coverage.html del coverage.html
+        platforms: [windows]
+        ignore_error: true
+      - cmd: if exist gosec-report.json del gosec-report.json
+        platforms: [windows]
+        ignore_error: true
+
+  # Docker operations
+  docker:build:
+    desc: Build Docker image
+    cmds:
+      - docker build -t messaging-service .
+
+  docker:run:
+    desc: Run service with docker-compose
+    cmds:
+      - docker-compose up -d
+
+  docker:stop:
+    desc: Stop messaging-service container
+    cmds:
+      - docker stop messaging-service
+
+  docker:logs:
+    desc: View messaging service logs
+    cmds:
+      - docker-compose logs -f messaging-service
+
+  # Development tools
+  dev:install-tools:
+    desc: Install development and CI tools
+    cmds:
+      - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.5.0
+      - go install golang.org/x/vuln/cmd/govulncheck@latest
+      - go install github.com/securego/gosec/v2/cmd/gosec@latest
+      - go install golang.org/x/tools/cmd/goimports@latest
+      - go install github.com/gordonklaus/ineffassign@latest
+      - echo "All development tools installed successfully!"
+
+  # Code quality
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - go mod download
+      - golangci-lint run --timeout=5m
+
+  format:
+    desc: Format code with gofmt
+    cmds:
+      - gofmt -w .
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  tidy:
+    desc: Tidy and verify go.mod
+    cmds:
+      - go mod tidy
+      - go mod verify
+
+  # Testing
+  test:coverage:
+    desc: Run tests with coverage report
+    cmds:
+      - go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+      - go tool cover -html=coverage.out -o coverage.html
+      - echo "Coverage report generated at coverage.html"
+
+  # Security
+  security:scan:
+    desc: Run gosec security scanner
+    cmds:
+      - gosec -fmt=json -out=gosec-report.json ./...
+      - echo "Security report saved to gosec-report.json"
+
+  security:vuln:
+    desc: Check for known vulnerabilities with govulncheck
+    cmds:
+      - govulncheck ./...
+
+  # Linting
+  lint:markdown:
+    desc: Lint Markdown files
+    cmds:
+      - npx markdownlint-cli2
+
+  # CI/CD
+  ci:all:
+    desc: Run all CI checks (format, tidy, lint, vet, test, vuln, lint:markdown)
+    cmds:
+      - task: format
+      - task: tidy
+      - task: lint
+      - task: vet
+      - task: test
+      - task: security:vuln
+      - task: lint:markdown
+      - echo "All CI checks passed!"

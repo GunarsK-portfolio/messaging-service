@@ -1,0 +1,43 @@
+version: "2"
+run:
+  tests: true
+linters:
+  enable:
+    - bodyclose
+    - gosec
+    - misspell
+    - revive
+    - unconvert
+  settings:
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+        - name: package-comments
+          disabled: true
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - lll
+        path: (.+)\.go
+        text: comment
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

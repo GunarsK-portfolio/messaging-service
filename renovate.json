@@ -1,0 +1,49 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    ":separateMajorReleases",
+    ":combinePatchMinorReleases",
+    ":label(go)"
+  ],
+  "timezone": "Europe/Riga",
+  "schedule": ["every weekend"],
+  "packageRules": [
+    {
+      "matchManagers": ["gomod"],
+      "matchUpdateTypes": ["patch"],
+      "automerge": true,
+      "automergeType": "pr",
+      "labels": ["go", "dependencies", "automerge"]
+    },
+    {
+      "matchManagers": ["gomod"],
+      "matchUpdateTypes": ["minor"],
+      "groupName": "Go minor updates",
+      "labels": ["go", "dependencies", "minor-update"]
+    },
+    {
+      "matchManagers": ["gomod"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true,
+      "labels": ["go", "dependencies", "major-update"]
+    },
+    {
+      "matchManagers": ["dockerfile"],
+      "groupName": "Docker base images",
+      "dependencyDashboardApproval": true,
+      "labels": ["docker", "manual-review"]
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions",
+      "automerge": true,
+      "labels": ["ci"]
+    }
+  ],
+  "prHourlyLimit": 5,
+  "prConcurrentLimit": 10,
+  "rebaseWhen": "behind-base-branch"
+}
