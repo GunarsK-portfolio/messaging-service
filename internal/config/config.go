@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/go-playground/validator/v10"
 
@@ -12,15 +13,23 @@ import (
 type Config struct {
 	common.DatabaseConfig
 	common.RabbitMQConfig
-	SES SESConfig
+	SES        SESConfig
+	HealthPort int
 }
 
 // Load loads all configuration from environment variables
 func Load() *Config {
+	healthPortStr := common.GetEnv("PORT", "8080")
+	healthPort, err := strconv.Atoi(healthPortStr)
+	if err != nil {
+		panic(fmt.Sprintf("Invalid PORT: %v", err))
+	}
+
 	cfg := &Config{
 		DatabaseConfig: common.NewDatabaseConfig(),
 		RabbitMQConfig: common.NewRabbitMQConfig(),
 		SES:            NewSESConfig(),
+		HealthPort:     healthPort,
 	}
 
 	validate := validator.New()

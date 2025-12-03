@@ -3,17 +3,21 @@ package main
 import (
 	"context"
 	"os"
-	"os/signal"
 	"strconv"
-	"syscall"
+	"time"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/GunarsK-portfolio/messaging-service/internal/config"
 	"github.com/GunarsK-portfolio/messaging-service/internal/email"
 	"github.com/GunarsK-portfolio/messaging-service/internal/handler"
 	"github.com/GunarsK-portfolio/messaging-service/internal/repository"
+	"github.com/GunarsK-portfolio/messaging-service/internal/routes"
 	commondb "github.com/GunarsK-portfolio/portfolio-common/database"
+	"github.com/GunarsK-portfolio/portfolio-common/health"
 	"github.com/GunarsK-portfolio/portfolio-common/logger"
 	"github.com/GunarsK-portfolio/portfolio-common/queue"
+	"github.com/GunarsK-portfolio/portfolio-common/server"
 )
 
 func main() {
@@ -28,9 +32,8 @@ func main() {
 
 	appLogger.Info("Starting messaging worker", "version", "1.0")
 
-	// Context for graceful shutdown
+	// Context for consumer shutdown (cancelled when server receives signal)
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	// Database connection
 	//nolint:staticcheck // Embedded field name required due to ambiguous fields
@@ -47,11 +50,6 @@ func main() {
 		appLogger.Error("Failed to connect to database", "error", err)
 		os.Exit(1)
 	}
-	defer func() {
-		if closeErr := commondb.CloseDB(db); closeErr != nil {
-			appLogger.Error("Failed to close database", "error", closeErr)
-		}
-	}()
 	appLogger.Info("Database connection established")
 
 	// RabbitMQ publisher (needed for retry queue infrastructure)
@@ -60,11 +58,6 @@ func main() {
 		appLogger.Error("Failed to connect to RabbitMQ publisher", "error", err)
 		os.Exit(1)
 	}
-	defer func() {
-		if closeErr := publisher.Close(); closeErr != nil {
-			appLogger.Error("Failed to close RabbitMQ publisher", "error", closeErr)
-		}
-	}()
 	appLogger.Info("RabbitMQ publisher established")
 
 	// RabbitMQ consumer
@@ -73,11 +66,6 @@ func main() {
 		appLogger.Error("Failed to create RabbitMQ consumer", "error", err)
 		os.Exit(1)
 	}
-	defer func() {
-		if closeErr := consumer.Close(); closeErr != nil {
-			appLogger.Error("Failed to close RabbitMQ consumer", "error", closeErr)
-		}
-	}()
 	appLogger.Info("RabbitMQ consumer established")
 
 	// SES email client
@@ -98,30 +86,48 @@ func main() {
 	repo := repository.New(db)
 	msgHandler := handler.New(repo, emailClient, appLogger)
 
-	// Graceful shutdown handling
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	// Health checks
+	healthAgg := health.NewAggregator(3 * time.Second)
+	healthAgg.Register(health.NewPostgresChecker(db))
+	healthAgg.Register(health.NewRabbitMQChecker(publisher.Connection()))
 
+	// Start consumer in background
 	go func() {
-		sig := <-sigChan
-		appLogger.Info("Received shutdown signal", "signal", sig)
-		cancel()
+		appLogger.Info("Starting message consumer",
+			"queue", cfg.Queue,
+			"maxRetries", publisher.MaxRetries(),
+		)
+
+		if err := consumer.Consume(ctx, msgHandler.Process); err != nil {
+			if ctx.Err() != nil {
+				appLogger.Info("Consumer stopped due to shutdown")
+			} else {
+				appLogger.Error("Consumer error", "error", err)
+			}
+		}
 	}()
 
-	// Start consuming messages
-	appLogger.Info("Starting message consumer",
-		"queue", cfg.Queue,
-		"maxRetries", publisher.MaxRetries(),
-	)
+	// Health HTTP server
+	router := gin.New()
+	router.Use(logger.Recovery(appLogger))
+	routes.Setup(router, healthAgg)
 
-	if err := consumer.Consume(ctx, msgHandler.Process); err != nil {
-		if ctx.Err() != nil {
-			appLogger.Info("Consumer stopped due to shutdown")
-		} else {
-			appLogger.Error("Consumer error", "error", err)
-			os.Exit(1)
+	appLogger.Info("Messaging worker ready", "port", cfg.HealthPort, "environment", os.Getenv("ENVIRONMENT"))
+
+	serverCfg := server.DefaultConfig(strconv.Itoa(cfg.HealthPort))
+	if err := server.RunWithCleanup(router, serverCfg, appLogger, func() {
+		cancel()
+		if closeErr := consumer.Close(); closeErr != nil {
+			appLogger.Error("Failed to close RabbitMQ consumer", "error", closeErr)
 		}
+		if closeErr := publisher.Close(); closeErr != nil {
+			appLogger.Error("Failed to close RabbitMQ publisher", "error", closeErr)
+		}
+		if closeErr := commondb.CloseDB(db); closeErr != nil {
+			appLogger.Error("Failed to close database", "error", closeErr)
+		}
+	}); err != nil {
+		appLogger.Error("Server error", "error", err)
+		os.Exit(1)
 	}
-
-	appLogger.Info("Messaging worker shutdown complete")
 }
