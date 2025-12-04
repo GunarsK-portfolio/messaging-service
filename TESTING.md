@@ -36,7 +36,7 @@ go test -v -run TestProcess_.*Error ./internal/handler/
 **`internal/handler/`** - 16 tests
 
 | Category | Tests | Coverage |
-|----------|-------|----------|
+| -------- | ----- | -------- |
 | Constructor | 1 | Handler initialization |
 | Process Success | 3 | Full flow, single recipient, skip already sent |
 | Process Errors | 6 | Invalid JSON, not found, no recipients, failures |
