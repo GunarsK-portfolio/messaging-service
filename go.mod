@@ -9,7 +9,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.5
 	github.com/aws/aws-sdk-go-v2/service/ses v1.34.17
 	github.com/gin-gonic/gin v1.11.0
-	github.com/go-playground/validator/v10 v10.28.0
+	github.com/go-playground/validator/v10 v10.29.0
 	github.com/rabbitmq/amqp091-go v1.10.0
 	gorm.io/gorm v1.31.1
 )
