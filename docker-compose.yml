@@ -68,7 +68,7 @@ services:
 
   # LocalStack (AWS SES emulation for local development)
   localstack:
-    image: localstack/localstack:4.11
+    image: localstack/localstack:4.12
     container_name: localstack
     restart: unless-stopped
     environment:
