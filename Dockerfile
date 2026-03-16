@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26.1-alpine AS builder
 
 WORKDIR /app
 
@@ -17,9 +17,10 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o worker ./cmd/worker
 
 # Production stage
-FROM alpine:3.23
+FROM alpine:3.23.3
 
-# Security updates and ca-certificates for HTTPS
+# Security update - CACHE_BUST is set by CI to force fresh apk upgrade
+ARG CACHE_BUST
 RUN apk upgrade --no-cache && apk add --no-cache ca-certificates tzdata
 
 # Create non-root user

@@ -10,9 +10,9 @@ import (
 
 // Repository defines the interface for messaging worker data operations
 type Repository interface {
-	// Contact Messages
-	GetContactMessageByID(ctx context.Context, id int64) (*models.ContactMessage, error)
-	UpdateMessageStatus(ctx context.Context, id int64, status string, lastError *string) error
+	// Emails
+	GetEmailByID(ctx context.Context, id int64) (*models.Email, error)
+	UpdateEmailStatus(ctx context.Context, id int64, status string, lastError *string) error
 
 	// Recipients
 	GetActiveRecipients(ctx context.Context) ([]models.Recipient, error)
@@ -30,41 +30,42 @@ func New(db *gorm.DB) Repository {
 	return &repository{db: db}
 }
 
-// GetContactMessageByID retrieves a contact message by ID
-func (r *repository) GetContactMessageByID(ctx context.Context, id int64) (*models.ContactMessage, error) {
-	var message models.ContactMessage
-	err := r.db.WithContext(ctx).First(&message, id).Error
+// GetEmailByID retrieves an email by ID
+func (r *repository) GetEmailByID(ctx context.Context, id int64) (*models.Email, error) {
+	var email models.Email
+	err := r.db.WithContext(ctx).First(&email, id).Error
 	if err != nil {
-		return nil, fmt.Errorf("failed to get contact message %d: %w", id, err)
+		return nil, fmt.Errorf("failed to get email %d: %w", id, err)
 	}
-	return &message, nil
+	return &email, nil
 }
 
-// UpdateMessageStatus updates the status of a contact message
-func (r *repository) UpdateMessageStatus(ctx context.Context, id int64, status string, lastError *string) error {
+// UpdateEmailStatus updates the status of an email
+func (r *repository) UpdateEmailStatus(ctx context.Context, id int64, status string, lastError *string) error {
 	updates := map[string]interface{}{
-		"status": status,
+		"status":     status,
+		"last_error": nil,
 	}
 	if lastError != nil {
 		updates["last_error"] = *lastError
 	}
-	if status == models.MessageStatusSent {
+	if status == models.EmailStatusSent {
 		updates["sent_at"] = r.db.NowFunc()
 	}
-	if status == models.MessageStatusFailed {
+	if status == models.EmailStatusFailed {
 		updates["attempts"] = gorm.Expr("attempts + 1")
 	}
 
 	result := r.db.WithContext(ctx).
-		Model(&models.ContactMessage{}).
+		Model(&models.Email{}).
 		Where("id = ?", id).
 		Updates(updates)
 
 	if result.Error != nil {
-		return fmt.Errorf("failed to update message status: %w", result.Error)
+		return fmt.Errorf("failed to update email status: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("message %d not found", id)
+		return fmt.Errorf("email %d not found", id)
 	}
 	return nil
 }
