@@ -43,7 +43,8 @@ func (r *repository) GetEmailByID(ctx context.Context, id int64) (*models.Email,
 // UpdateEmailStatus updates the status of an email
 func (r *repository) UpdateEmailStatus(ctx context.Context, id int64, status string, lastError *string) error {
 	updates := map[string]interface{}{
-		"status": status,
+		"status":     status,
+		"last_error": nil,
 	}
 	if lastError != nil {
 		updates["last_error"] = *lastError
