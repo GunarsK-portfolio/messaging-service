@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"sync"
 	"time"
 
@@ -19,7 +20,7 @@ import (
 // maxConcurrentEmails limits parallel email sending to avoid overwhelming SES
 const maxConcurrentEmails = 5
 
-// Handler processes contact message events from the queue
+// Handler processes email events from the queue
 type Handler struct {
 	repo        repository.Repository
 	emailClient email.Client
@@ -35,35 +36,39 @@ func New(repo repository.Repository, emailClient email.Client, logger *slog.Logg
 	}
 }
 
-// Process handles a single message delivery from the queue
+// Process handles a single email delivery from the queue
 func (h *Handler) Process(ctx context.Context, delivery amqp.Delivery) error {
-	// Get logger with context (includes correlation_id, request_id if present)
 	log := logger.FromContext(ctx, h.logger)
 
-	// Parse the event
-	var event models.ContactMessageEvent
+	var event models.EmailEvent
 	if err := json.Unmarshal(delivery.Body, &event); err != nil {
 		log.Error("Failed to unmarshal event", "error", err, "bodyLength", len(delivery.Body))
 		return fmt.Errorf("unmarshal event: %w", err)
 	}
 
-	log = log.With("messageId", event.MessageID)
-	log.Info("Processing message")
+	log = log.With("emailId", event.EmailID)
+	log.Info("Processing email")
 
-	// Fetch message from database
-	message, err := h.repo.GetContactMessageByID(ctx, event.MessageID)
+	msg, err := h.repo.GetEmailByID(ctx, event.EmailID)
 	if err != nil {
-		log.Error("Failed to get message", "error", err)
-		return fmt.Errorf("get message %d: %w", event.MessageID, err)
+		log.Error("Failed to get email", "error", err)
+		return fmt.Errorf("get email %d: %w", event.EmailID, err)
 	}
 
-	// Skip if already sent
-	if message.Status == models.MessageStatusSent {
-		log.Info("Message already sent, skipping")
+	if msg.Status == models.EmailStatusSent {
+		log.Info("Email already sent, skipping")
 		return nil
 	}
 
-	// Get active recipients
+	// Route based on email type
+	if msg.Type == models.EmailTypeContactForm {
+		return h.processContactForm(ctx, log, msg)
+	}
+	return h.processDirectEmail(ctx, log, msg)
+}
+
+// processContactForm sends to all active recipients from the recipients table
+func (h *Handler) processContactForm(ctx context.Context, log *slog.Logger, msg *models.Email) error {
 	recipients, err := h.repo.GetActiveRecipients(ctx)
 	if err != nil {
 		log.Error("Failed to get recipients", "error", err)
@@ -73,15 +78,14 @@ func (h *Handler) Process(ctx context.Context, delivery amqp.Delivery) error {
 	if len(recipients) == 0 {
 		log.Warn("No active recipients configured")
 		errMsg := "no active recipients configured"
-		if err := h.repo.UpdateMessageStatus(ctx, event.MessageID, models.MessageStatusFailed, &errMsg); err != nil {
-			log.Error("Failed to update message status to failed", "error", err)
+		if err := h.repo.UpdateEmailStatus(ctx, msg.ID, models.EmailStatusFailed, &errMsg); err != nil {
+			log.Error("Failed to update email status to failed", "error", err)
 		}
 		return fmt.Errorf("no active recipients")
 	}
 
-	// Send email to each recipient with bounded concurrency
-	subject := fmt.Sprintf("Contact Form: %s", message.Subject)
-	body := h.formatEmailBody(message)
+	subject := fmt.Sprintf("Contact Form: %s", msg.Subject)
+	body := h.formatContactFormBody(msg)
 
 	type result struct {
 		recipient string
@@ -98,11 +102,11 @@ func (h *Handler) Process(ctx context.Context, delivery amqp.Delivery) error {
 		wg.Add(1)
 		go func(r models.Recipient) {
 			defer wg.Done()
-			semaphore <- struct{}{}        // Acquire
-			defer func() { <-semaphore }() // Release
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
 
-			err := h.sendToRecipient(ctx, log, message, r, subject, body)
-			resultsChan <- result{recipient: r.Email, err: err}
+			sendErr := h.sendAndRecord(ctx, log, msg, r.Email, subject, body)
+			resultsChan <- result{recipient: r.Email, err: sendErr}
 		}(recipient)
 	}
 
@@ -115,46 +119,64 @@ func (h *Handler) Process(ctx context.Context, delivery amqp.Delivery) error {
 	for res := range resultsChan {
 		if res.err != nil {
 			lastErr = res.err
-			log.Error("Failed to send to recipient",
-				"recipient", res.recipient,
-				"error", res.err,
-			)
+			log.Error("Failed to send to recipient", "recipient", res.recipient, "error", res.err)
 		} else {
 			successCount++
 		}
 	}
 
-	// Update message status based on results
 	if successCount > 0 {
-		if err := h.repo.UpdateMessageStatus(ctx, event.MessageID, models.MessageStatusSent, nil); err != nil {
-			log.Error("Failed to update message status to sent", "error", err)
+		if err := h.repo.UpdateEmailStatus(ctx, msg.ID, models.EmailStatusSent, nil); err != nil {
+			log.Error("Failed to update email status to sent", "error", err)
 		}
-		log.Info("Message sent successfully",
-			"successCount", successCount,
-			"totalRecipients", len(recipients),
-		)
+		log.Info("Email sent successfully", "successCount", successCount, "totalRecipients", len(recipients))
 		return nil
 	}
 
-	// All recipients failed
 	errMsg := lastErr.Error()
-	if err := h.repo.UpdateMessageStatus(ctx, event.MessageID, models.MessageStatusFailed, &errMsg); err != nil {
-		log.Error("Failed to update message status to failed", "error", err)
+	if err := h.repo.UpdateEmailStatus(ctx, msg.ID, models.EmailStatusFailed, &errMsg); err != nil {
+		log.Error("Failed to update email status to failed", "error", err)
 	}
-
 	return fmt.Errorf("all recipients failed: %w", lastErr)
 }
 
-// sendToRecipient sends email to a single recipient and records the attempt
-func (h *Handler) sendToRecipient(ctx context.Context, log *slog.Logger, message *models.ContactMessage, recipient models.Recipient, subject, body string) error {
+// processDirectEmail sends to the recipient_email on the email record (auth emails, etc.)
+func (h *Handler) processDirectEmail(ctx context.Context, log *slog.Logger, msg *models.Email) error {
+	if msg.RecipientEmail == nil || *msg.RecipientEmail == "" {
+		errMsg := "no recipient_email set for direct email"
+		if err := h.repo.UpdateEmailStatus(ctx, msg.ID, models.EmailStatusFailed, &errMsg); err != nil {
+			log.Error("Failed to update email status to failed", "error", err)
+		}
+		return fmt.Errorf("no recipient_email for email %d", msg.ID)
+	}
+
+	to := *msg.RecipientEmail
+	err := h.sendAndRecord(ctx, log, msg, to, msg.Subject, msg.Message)
+	if err != nil {
+		errMsg := err.Error()
+		if updateErr := h.repo.UpdateEmailStatus(ctx, msg.ID, models.EmailStatusFailed, &errMsg); updateErr != nil {
+			log.Error("Failed to update email status to failed", "error", updateErr)
+		}
+		return fmt.Errorf("send to %s failed: %w", to, err)
+	}
+
+	if err := h.repo.UpdateEmailStatus(ctx, msg.ID, models.EmailStatusSent, nil); err != nil {
+		log.Error("Failed to update email status to sent", "error", err)
+	}
+	log.Info("Email sent successfully", "recipient", to)
+	return nil
+}
+
+// sendAndRecord sends an email and records the delivery attempt
+func (h *Handler) sendAndRecord(ctx context.Context, log *slog.Logger, msg *models.Email, to, subject, body string) error {
 	attempt := &models.DeliveryAttempt{
-		MessageID:      message.ID,
-		RecipientEmail: recipient.Email,
+		MessageID:      msg.ID,
+		RecipientEmail: to,
 		Status:         models.DeliveryStatusPending,
 		AttemptedAt:    time.Now().UTC(),
 	}
 
-	err := h.emailClient.SendEmail(ctx, recipient.Email, subject, body)
+	err := h.emailClient.SendEmail(ctx, to, subject, body)
 	if err != nil {
 		attempt.Status = models.DeliveryStatusFailed
 		errMsg := err.Error()
@@ -163,19 +185,30 @@ func (h *Handler) sendToRecipient(ctx context.Context, log *slog.Logger, message
 		attempt.Status = models.DeliveryStatusSuccess
 	}
 
-	// Record the attempt
 	if recordErr := h.repo.CreateDeliveryAttempt(ctx, attempt); recordErr != nil {
-		log.Error("Failed to record delivery attempt",
-			"recipient", recipient.Email,
-			"error", recordErr,
-		)
+		log.Error("Failed to record delivery attempt", "recipient", to, "error", recordErr)
 	}
 
 	return err
 }
 
-// formatEmailBody creates the email body from the contact message
-func (h *Handler) formatEmailBody(message *models.ContactMessage) string {
+var htmlTagRegex = regexp.MustCompile(`<[^>]*>`)
+
+// stripHTML removes HTML tags for plain-text fallback
+func stripHTML(html string) string {
+	return htmlTagRegex.ReplaceAllString(html, "")
+}
+
+// formatContactFormBody creates the email body from a contact form submission
+func (h *Handler) formatContactFormBody(msg *models.Email) string {
+	name := ""
+	if msg.Name != nil {
+		name = *msg.Name
+	}
+	emailAddr := ""
+	if msg.SenderEmail != nil {
+		emailAddr = *msg.SenderEmail
+	}
 	return fmt.Sprintf(`New contact form submission:
 
 From: %s <%s>
@@ -186,12 +219,12 @@ Message:
 
 ---
 Submitted at: %s
-Message ID: %d`,
-		message.Name,
-		message.Email,
-		message.Subject,
-		message.Message,
-		message.CreatedAt.Format(time.RFC1123),
-		message.ID,
+Email ID: %d`,
+		name,
+		emailAddr,
+		msg.Subject,
+		msg.Message,
+		msg.CreatedAt.Format(time.RFC1123),
+		msg.ID,
 	)
 }

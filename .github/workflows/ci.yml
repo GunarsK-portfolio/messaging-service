@@ -8,8 +8,8 @@ on:
   workflow_dispatch: # Allow manual trigger
 
 env:
-  GO_VERSION: '1.25.6'
-  GOLANGCI_LINT_VERSION: 'v2.5.0'
+  GO_VERSION: '1.26.1'
+  GOLANGCI_LINT_VERSION: 'v2.9.0'
 
 jobs:
   # Job 1: Lint Go code

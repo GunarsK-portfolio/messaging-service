@@ -3,6 +3,7 @@ package email
 import (
 	"context"
 	"fmt"
+	"regexp"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -36,7 +37,6 @@ type Config struct {
 
 // NewSESClient creates a new SES email client
 func NewSESClient(ctx context.Context, cfg Config) (*SESClient, error) {
-	// Validate required configuration
 	if cfg.Region == "" {
 		return nil, fmt.Errorf("region is required")
 	}
@@ -47,7 +47,6 @@ func NewSESClient(ctx context.Context, cfg Config) (*SESClient, error) {
 	var opts []func(*config.LoadOptions) error
 	opts = append(opts, config.WithRegion(cfg.Region))
 
-	// Use static credentials if provided (LocalStack), otherwise use IAM role
 	if cfg.AccessKey != "" && cfg.SecretKey != "" {
 		opts = append(opts, config.WithCredentialsProvider(
 			credentials.NewStaticCredentialsProvider(cfg.AccessKey, cfg.SecretKey, ""),
@@ -72,15 +71,19 @@ func NewSESClient(ctx context.Context, cfg Config) (*SESClient, error) {
 	}, nil
 }
 
-// SendEmail sends an email via SES
+var htmlTagRegex = regexp.MustCompile(`<[^>]*>`)
+
+// SendEmail sends an email via SES.
+// The body is sent as both HTML and plain text (tags stripped for text version).
 func (c *SESClient) SendEmail(ctx context.Context, to, subject, body string) error {
-	// Validate inputs for clearer error messages
 	if to == "" {
 		return fmt.Errorf("recipient email address is required")
 	}
 	if subject == "" {
 		return fmt.Errorf("email subject is required")
 	}
+
+	textBody := htmlTagRegex.ReplaceAllString(body, "")
 
 	input := &ses.SendEmailInput{
 		Source: aws.String(c.fromEmail),
@@ -93,8 +96,12 @@ func (c *SESClient) SendEmail(ctx context.Context, to, subject, body string) err
 				Charset: aws.String("UTF-8"),
 			},
 			Body: &types.Body{
-				Text: &types.Content{
+				Html: &types.Content{
 					Data:    aws.String(body),
+					Charset: aws.String("UTF-8"),
+				},
+				Text: &types.Content{
+					Data:    aws.String(textBody),
 					Charset: aws.String("UTF-8"),
 				},
 			},

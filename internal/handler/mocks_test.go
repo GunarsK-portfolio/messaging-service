@@ -16,22 +16,22 @@ import (
 // =============================================================================
 
 type mockRepository struct {
-	getContactMessageByIDFunc func(ctx context.Context, id int64) (*models.ContactMessage, error)
-	updateMessageStatusFunc   func(ctx context.Context, id int64, status string, lastError *string) error
+	getEmailByIDFunc          func(ctx context.Context, id int64) (*models.Email, error)
+	updateEmailStatusFunc     func(ctx context.Context, id int64, status string, lastError *string) error
 	getActiveRecipientsFunc   func(ctx context.Context) ([]models.Recipient, error)
 	createDeliveryAttemptFunc func(ctx context.Context, attempt *models.DeliveryAttempt) error
 }
 
-func (m *mockRepository) GetContactMessageByID(ctx context.Context, id int64) (*models.ContactMessage, error) {
-	if m.getContactMessageByIDFunc != nil {
-		return m.getContactMessageByIDFunc(ctx, id)
+func (m *mockRepository) GetEmailByID(ctx context.Context, id int64) (*models.Email, error) {
+	if m.getEmailByIDFunc != nil {
+		return m.getEmailByIDFunc(ctx, id)
 	}
 	return nil, nil
 }
 
-func (m *mockRepository) UpdateMessageStatus(ctx context.Context, id int64, status string, lastError *string) error {
-	if m.updateMessageStatusFunc != nil {
-		return m.updateMessageStatusFunc(ctx, id, status, lastError)
+func (m *mockRepository) UpdateEmailStatus(ctx context.Context, id int64, status string, lastError *string) error {
+	if m.updateEmailStatusFunc != nil {
+		return m.updateEmailStatusFunc(ctx, id, status, lastError)
 	}
 	return nil
 }
@@ -79,16 +79,34 @@ func createTestLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 }
 
-func createTestContactMessage() *models.ContactMessage {
-	return &models.ContactMessage{
-		ID:        1,
-		Name:      "John Doe",
-		Email:     "john@example.com",
-		Subject:   "Test Subject",
-		Message:   "Test message content",
-		Status:    models.MessageStatusPending,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+func strPtr(s string) *string {
+	return &s
+}
+
+func createTestContactFormEmail() *models.Email {
+	return &models.Email{
+		ID:          1,
+		Type:        models.EmailTypeContactForm,
+		Name:        strPtr("John Doe"),
+		SenderEmail: strPtr("john@example.com"),
+		Subject:     "Test Subject",
+		Message:     "Test message content",
+		Status:      models.EmailStatusPending,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+}
+
+func createTestDirectEmail() *models.Email {
+	return &models.Email{
+		ID:             2,
+		Type:           models.EmailTypeEmailVerification,
+		RecipientEmail: strPtr("user@example.com"),
+		Subject:        "Verify your email address",
+		Message:        "<html><body><p>Click here to verify</p></body></html>",
+		Status:         models.EmailStatusPending,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
 	}
 }
 
