@@ -33,7 +33,7 @@ func main() {
 	appLogger.Info("Starting messaging worker", "version", "1.0")
 
 	// Context for consumer shutdown (cancelled when server receives signal)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background()) //nolint:gosec // G118: cancel is called in RunWithCleanup shutdown callback
 
 	// Database connection
 	//nolint:staticcheck // Embedded field name required due to ambiguous fields
