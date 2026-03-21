@@ -3,7 +3,7 @@ module github.com/GunarsK-portfolio/messaging-service
 go 1.26.1
 
 require (
-	github.com/GunarsK-portfolio/portfolio-common v0.43.0
+	github.com/GunarsK-portfolio/portfolio-common v0.46.0
 	github.com/aws/aws-sdk-go-v2 v1.41.4
 	github.com/aws/aws-sdk-go-v2/config v1.32.12
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.12
