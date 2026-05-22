@@ -146,14 +146,14 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
-          version: 'v0.69.3'
+          version: 'v0.70.0'
 
       - name: Upload Trivy results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v4
@@ -162,13 +162,13 @@ jobs:
           sarif_file: 'trivy-results.sarif'
 
       - name: Run Trivy vulnerability scanner (table output)
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         if: always()
         with:
           image-ref: ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
           format: 'table'
           severity: 'CRITICAL,HIGH,MEDIUM'
-          version: 'v0.69.3'
+          version: 'v0.70.0'
 
   # Job 5: Static analysis with gosec
   security-analysis:
@@ -188,7 +188,7 @@ jobs:
           cache: true
 
       - name: Run gosec Security Scanner
-        uses: securego/gosec@v2.25.0
+        uses: securego/gosec@v2.26.1
         with:
           args: '-no-fail -fmt sarif -out gosec-results.sarif ./...'
 
@@ -209,7 +209,7 @@ jobs:
           fetch-depth: 0 # Full history for scanning
 
       - name: Run TruffleHog
-        uses: trufflesecurity/trufflehog@v3.94.3
+        uses: trufflesecurity/trufflehog@v3.95.3
         with:
           path: ./
           base: ""
