@@ -19,14 +19,14 @@ email notifications via AWS SES.
 
 ## Tech Stack
 
-- **Language**: Go 1.25.3
+- **Language**: Go 1.26.4
 - **Queue**: RabbitMQ
 - **Database**: PostgreSQL (GORM)
 - **Email**: AWS SES (LocalStack for local dev)
 
 ## Prerequisites
 
-- Go 1.25+
+- Go 1.26+
 - Node.js 22+ and npm 11+
 - PostgreSQL (or use Docker Compose)
 - RabbitMQ (or use Docker Compose)
