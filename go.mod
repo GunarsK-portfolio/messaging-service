@@ -1,6 +1,6 @@
 module github.com/GunarsK-portfolio/messaging-service
 
-go 1.26.3
+go 1.26.4
 
 require (
 	github.com/GunarsK-portfolio/portfolio-common v0.49.0
