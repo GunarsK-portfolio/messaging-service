@@ -1,5 +1,5 @@
-github.com/GunarsK-portfolio/portfolio-common v0.49.0 h1:fa6V/+9G/bLXug/BZC5X9v4wkxo0P94t1/GxpDxy+Wk=
-github.com/GunarsK-portfolio/portfolio-common v0.49.0/go.mod h1:2ovDQEtN0JTVgkRELhA0ZE+I5oKLmnTgi0Y5lZR9c8c=
+github.com/GunarsK-portfolio/portfolio-common v0.50.0 h1:Te9t8MWL5IP8PFAmktYEid4N1oKJvm2t2ibZKL9MVW8=
+github.com/GunarsK-portfolio/portfolio-common v0.50.0/go.mod h1:0zjgXLw+mymKEKrQ5FqJdNZ62+KvBPLMvyWqJ7l/zBA=
 github.com/aws/aws-sdk-go-v2 v1.42.0 h1:XvXMJTkFQtpBKIWZnmr9ZEOc2InWM2yldjXEJ/bymhA=
 github.com/aws/aws-sdk-go-v2 v1.42.0/go.mod h1:27+ACypSLljLAEKsCYOmrjKh83vuTRkuAe9Uv/3A4bg=
 github.com/aws/aws-sdk-go-v2/config v1.32.24 h1:aEDEj533yGdVvEHfkCY0D/1FbDrjnZr4pIulxRjqpHs=
