@@ -11,28 +11,36 @@ import (
 
 	"github.com/GunarsK-portfolio/portfolio-common/logger"
 	"github.com/GunarsK-portfolio/portfolio-common/models"
+	"github.com/GunarsK-portfolio/portfolio-common/queue"
 	amqp "github.com/rabbitmq/amqp091-go"
 
 	"github.com/GunarsK-portfolio/messaging-service/internal/email"
 	"github.com/GunarsK-portfolio/messaging-service/internal/repository"
 )
 
-// maxConcurrentEmails limits parallel email sending to avoid overwhelming SES
-const maxConcurrentEmails = 5
+// defaultMaxConcurrentEmails is used when no positive limit is provided
+const defaultMaxConcurrentEmails = 5
 
 // Handler processes email events from the queue
 type Handler struct {
-	repo        repository.Repository
-	emailClient email.Client
-	logger      *slog.Logger
+	repo                repository.Repository
+	emailClient         email.Client
+	logger              *slog.Logger
+	maxConcurrentEmails int
 }
 
-// New creates a new message handler
-func New(repo repository.Repository, emailClient email.Client, logger *slog.Logger) *Handler {
+// New creates a new message handler. maxConcurrentEmails limits parallel
+// email sending to avoid overwhelming SES; values <= 0 fall back to the
+// default of 5.
+func New(repo repository.Repository, emailClient email.Client, logger *slog.Logger, maxConcurrentEmails int) *Handler {
+	if maxConcurrentEmails <= 0 {
+		maxConcurrentEmails = defaultMaxConcurrentEmails
+	}
 	return &Handler{
-		repo:        repo,
-		emailClient: emailClient,
-		logger:      logger,
+		repo:                repo,
+		emailClient:         emailClient,
+		logger:              logger,
+		maxConcurrentEmails: maxConcurrentEmails,
 	}
 }
 
@@ -43,7 +51,8 @@ func (h *Handler) Process(ctx context.Context, delivery amqp.Delivery) error {
 	var event models.EmailEvent
 	if err := json.Unmarshal(delivery.Body, &event); err != nil {
 		log.Error("Failed to unmarshal event", "error", err, "bodyLength", len(delivery.Body))
-		return fmt.Errorf("unmarshal event: %w", err)
+		// A malformed payload can never succeed - skip the retry ladder.
+		return queue.Permanent(fmt.Errorf("unmarshal event: %w", err))
 	}
 
 	log = log.With("emailId", event.EmailID)
@@ -95,7 +104,7 @@ func (h *Handler) processContactForm(ctx context.Context, log *slog.Logger, msg 
 	var (
 		wg          sync.WaitGroup
 		resultsChan = make(chan result, len(recipients))
-		semaphore   = make(chan struct{}, maxConcurrentEmails)
+		semaphore   = make(chan struct{}, h.maxConcurrentEmails)
 	)
 
 	for _, recipient := range recipients {

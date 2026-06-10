@@ -79,6 +79,12 @@ func createTestLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 }
 
+// newTestHandler builds a Handler with the default concurrency limit used
+// throughout the tests.
+func newTestHandler(repo repository.Repository, emailClient email.Client) *Handler {
+	return New(repo, emailClient, createTestLogger(), 5)
+}
+
 func strPtr(s string) *string {
 	return &s
 }

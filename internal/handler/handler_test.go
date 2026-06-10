@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/GunarsK-portfolio/portfolio-common/models"
+	"github.com/GunarsK-portfolio/portfolio-common/queue"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -21,7 +22,7 @@ func TestNew_ReturnsHandler(t *testing.T) {
 	mockEmail := &mockEmailClient{}
 	logger := createTestLogger()
 
-	handler := New(mockRepo, mockEmail, logger)
+	handler := New(mockRepo, mockEmail, logger, 5)
 
 	if handler == nil {
 		t.Fatal("expected handler to not be nil")
@@ -79,7 +80,7 @@ func TestProcess_ContactFormSuccess(t *testing.T) {
 		},
 	}
 
-	handler := New(mockRepo, mockEmail, createTestLogger())
+	handler := newTestHandler(mockRepo, mockEmail)
 
 	event := models.EmailEvent{EmailID: 1}
 	body, _ := json.Marshal(event)
@@ -132,7 +133,7 @@ func TestProcess_ContactFormSingleRecipient(t *testing.T) {
 		},
 	}
 
-	handler := New(mockRepo, mockEmail, createTestLogger())
+	handler := newTestHandler(mockRepo, mockEmail)
 
 	event := models.EmailEvent{EmailID: 1}
 	body, _ := json.Marshal(event)
@@ -178,7 +179,7 @@ func TestProcess_DirectEmailSuccess(t *testing.T) {
 		},
 	}
 
-	handler := New(mockRepo, mockEmail, createTestLogger())
+	handler := newTestHandler(mockRepo, mockEmail)
 
 	event := models.EmailEvent{EmailID: 2}
 	body, _ := json.Marshal(event)
@@ -218,7 +219,7 @@ func TestProcess_DirectEmailNoRecipient(t *testing.T) {
 		},
 	}
 	mockEmail := &mockEmailClient{}
-	handler := New(mockRepo, mockEmail, createTestLogger())
+	handler := newTestHandler(mockRepo, mockEmail)
 
 	event := models.EmailEvent{EmailID: 2}
 	body, _ := json.Marshal(event)
@@ -258,7 +259,7 @@ func TestProcess_DirectEmailSendFailure(t *testing.T) {
 		},
 	}
 
-	handler := New(mockRepo, mockEmail, createTestLogger())
+	handler := newTestHandler(mockRepo, mockEmail)
 
 	event := models.EmailEvent{EmailID: 2}
 	body, _ := json.Marshal(event)
@@ -303,7 +304,7 @@ func TestProcess_SkipsAlreadySentEmail(t *testing.T) {
 		},
 	}
 
-	handler := New(mockRepo, mockEmail, createTestLogger())
+	handler := newTestHandler(mockRepo, mockEmail)
 
 	event := models.EmailEvent{EmailID: 1}
 	body, _ := json.Marshal(event)
@@ -329,7 +330,7 @@ func TestProcess_SkipsAlreadySentEmail(t *testing.T) {
 func TestProcess_InvalidJSON(t *testing.T) {
 	mockRepo := &mockRepository{}
 	mockEmail := &mockEmailClient{}
-	handler := New(mockRepo, mockEmail, createTestLogger())
+	handler := newTestHandler(mockRepo, mockEmail)
 
 	delivery := amqp.Delivery{Body: []byte(`{invalid json}`)}
 
@@ -337,6 +338,17 @@ func TestProcess_InvalidJSON(t *testing.T) {
 
 	if err == nil {
 		t.Error("Process() should fail for invalid JSON")
+	}
+	if !errors.Is(err, queue.ErrPermanent) {
+		t.Error("invalid JSON should be a permanent error (straight to DLQ, no retries)")
+	}
+}
+
+func TestNew_NonPositiveConcurrencyFallsBackToDefault(t *testing.T) {
+	handler := New(&mockRepository{}, &mockEmailClient{}, createTestLogger(), 0)
+
+	if handler.maxConcurrentEmails != 5 {
+		t.Errorf("maxConcurrentEmails = %d, want default 5", handler.maxConcurrentEmails)
 	}
 }
 
@@ -347,7 +359,7 @@ func TestProcess_EmailNotFound(t *testing.T) {
 		},
 	}
 	mockEmail := &mockEmailClient{}
-	handler := New(mockRepo, mockEmail, createTestLogger())
+	handler := newTestHandler(mockRepo, mockEmail)
 
 	event := models.EmailEvent{EmailID: 999}
 	body, _ := json.Marshal(event)
@@ -379,7 +391,7 @@ func TestProcess_NoActiveRecipients(t *testing.T) {
 		},
 	}
 	mockEmail := &mockEmailClient{}
-	handler := New(mockRepo, mockEmail, createTestLogger())
+	handler := newTestHandler(mockRepo, mockEmail)
 
 	event := models.EmailEvent{EmailID: 1}
 	body, _ := json.Marshal(event)
@@ -410,7 +422,7 @@ func TestProcess_GetRecipientsError(t *testing.T) {
 		},
 	}
 	mockEmail := &mockEmailClient{}
-	handler := New(mockRepo, mockEmail, createTestLogger())
+	handler := newTestHandler(mockRepo, mockEmail)
 
 	event := models.EmailEvent{EmailID: 1}
 	body, _ := json.Marshal(event)
@@ -456,7 +468,7 @@ func TestProcess_AllEmailsFail(t *testing.T) {
 		},
 	}
 
-	handler := New(mockRepo, mockEmail, createTestLogger())
+	handler := newTestHandler(mockRepo, mockEmail)
 
 	event := models.EmailEvent{EmailID: 1}
 	body, _ := json.Marshal(event)
@@ -518,7 +530,7 @@ func TestProcess_PartialEmailFailure(t *testing.T) {
 		},
 	}
 
-	handler := New(mockRepo, mockEmail, createTestLogger())
+	handler := newTestHandler(mockRepo, mockEmail)
 
 	event := models.EmailEvent{EmailID: 1}
 	body, _ := json.Marshal(event)
@@ -564,7 +576,7 @@ func TestProcess_RecordsDeliveryAttemptOnSuccess(t *testing.T) {
 		},
 	}
 
-	handler := New(mockRepo, mockEmail, createTestLogger())
+	handler := newTestHandler(mockRepo, mockEmail)
 
 	event := models.EmailEvent{EmailID: 1}
 	body, _ := json.Marshal(event)
@@ -618,7 +630,7 @@ func TestProcess_RecordsDeliveryAttemptOnFailure(t *testing.T) {
 		},
 	}
 
-	handler := New(mockRepo, mockEmail, createTestLogger())
+	handler := newTestHandler(mockRepo, mockEmail)
 
 	event := models.EmailEvent{EmailID: 1}
 	body, _ := json.Marshal(event)
@@ -666,7 +678,7 @@ func TestProcess_ContinuesEvenWhenDeliveryAttemptRecordFails(t *testing.T) {
 		},
 	}
 
-	handler := New(mockRepo, mockEmail, createTestLogger())
+	handler := newTestHandler(mockRepo, mockEmail)
 
 	event := models.EmailEvent{EmailID: 1}
 	body, _ := json.Marshal(event)
@@ -717,7 +729,7 @@ func TestProcess_ContactFormEmailContentFormat(t *testing.T) {
 		},
 	}
 
-	handler := New(mockRepo, mockEmail, createTestLogger())
+	handler := newTestHandler(mockRepo, mockEmail)
 
 	event := models.EmailEvent{EmailID: 1}
 	body, _ := json.Marshal(event)
@@ -778,7 +790,7 @@ func TestProcess_ContextPropagation(t *testing.T) {
 		},
 	}
 
-	handler := New(mockRepo, mockEmail, createTestLogger())
+	handler := newTestHandler(mockRepo, mockEmail)
 
 	ctx := context.WithValue(context.Background(), ctxKey{}, "test-marker")
 
@@ -804,7 +816,7 @@ func TestProcess_ContextPropagation(t *testing.T) {
 // =============================================================================
 
 func TestFormatContactFormBody_ContainsAllFields(t *testing.T) {
-	handler := New(&mockRepository{}, &mockEmailClient{}, createTestLogger())
+	handler := newTestHandler(&mockRepository{}, &mockEmailClient{})
 	email := createTestContactFormEmail()
 	email.Name = strPtr("Jane Smith")
 	email.SenderEmail = strPtr("jane@test.com")

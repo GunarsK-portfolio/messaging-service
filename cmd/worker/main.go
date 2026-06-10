@@ -53,7 +53,7 @@ func main() {
 	appLogger.Info("Database connection established")
 
 	// RabbitMQ publisher (needed for retry queue infrastructure)
-	publisher, err := queue.NewRabbitMQPublisher(cfg.RabbitMQConfig)
+	publisher, err := queue.NewRabbitMQPublisher(cfg.RabbitMQConfig, queue.WithPublisherLogger(appLogger))
 	if err != nil {
 		appLogger.Error("Failed to connect to RabbitMQ publisher", "error", err)
 		os.Exit(1)
@@ -84,12 +84,13 @@ func main() {
 
 	// Repository and handler
 	repo := repository.New(db)
-	msgHandler := handler.New(repo, emailClient, appLogger)
+	msgHandler := handler.New(repo, emailClient, appLogger, cfg.MaxConcurrentEmails)
 
-	// Health checks
+	// Health checks (provider form stays accurate across reconnects)
 	healthAgg := health.NewAggregator(3 * time.Second)
 	healthAgg.Register(health.NewPostgresChecker(db))
-	healthAgg.Register(health.NewRabbitMQChecker(publisher.Connection()))
+	healthAgg.Register(health.NewRabbitMQCheckerWithProvider(publisher.Connection))
+	healthAgg.Register(health.NewQueueDepthChecker(publisher.Connection, publisher.DLQName(), 0))
 
 	// Start consumer in background
 	go func() {

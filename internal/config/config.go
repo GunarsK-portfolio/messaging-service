@@ -13,8 +13,9 @@ import (
 type Config struct {
 	common.DatabaseConfig
 	common.RabbitMQConfig
-	SES        SESConfig
-	HealthPort int
+	SES                 SESConfig
+	HealthPort          int
+	MaxConcurrentEmails int
 }
 
 // Load loads all configuration from environment variables
@@ -26,10 +27,11 @@ func Load() *Config {
 	}
 
 	cfg := &Config{
-		DatabaseConfig: common.NewDatabaseConfig(),
-		RabbitMQConfig: common.NewRabbitMQConfig(),
-		SES:            NewSESConfig(),
-		HealthPort:     healthPort,
+		DatabaseConfig:      common.NewDatabaseConfig(),
+		RabbitMQConfig:      common.NewRabbitMQConfig(),
+		SES:                 NewSESConfig(),
+		HealthPort:          healthPort,
+		MaxConcurrentEmails: common.GetEnvInt("MAX_CONCURRENT_EMAILS", 5),
 	}
 
 	validate := validator.New()
