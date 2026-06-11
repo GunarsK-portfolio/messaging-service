@@ -143,7 +143,9 @@ See [.env.example](.env.example) for all available configuration options.
 
 On failure, message is retried with exponential backoff (configurable via
 `RABBITMQ_RETRY_DELAYS`). After exhausting all retries, the message is moved to
-a dead-letter queue for manual inspection.
+a dead-letter queue for manual inspection. Permanent failures (e.g. malformed
+message payloads) skip the retry ladder and go straight to the dead-letter
+queue. The DLQ depth is reported on the `/health` endpoint.
 
 ## Integration
 
