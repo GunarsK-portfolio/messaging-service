@@ -3,7 +3,7 @@ module github.com/GunarsK-portfolio/messaging-service
 go 1.26.4
 
 require (
-	github.com/GunarsK-portfolio/portfolio-common v0.52.0
+	github.com/GunarsK-portfolio/portfolio-common v0.53.0
 	github.com/aws/aws-sdk-go-v2 v1.42.0
 	github.com/aws/aws-sdk-go-v2/config v1.32.24
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.23
@@ -38,6 +38,7 @@ require (
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/goccy/go-json v0.10.6 // indirect
 	github.com/goccy/go-yaml v1.19.2 // indirect
+	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
