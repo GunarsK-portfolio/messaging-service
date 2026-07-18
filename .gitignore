@@ -13,6 +13,10 @@ bin/
 *.out
 coverage.html
 
+# Security scan reports
+gosec-report.json
+
+
 # Dependency directories
 vendor/
 
