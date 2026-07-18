@@ -130,10 +130,6 @@ jobs:
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Get weekly cache key
-        id: week
-        run: echo "key=$(date +%Y-W%V)" >> "$GITHUB_OUTPUT"
-
       - name: Build and push Docker image
         uses: docker/build-push-action@v7
         with:
@@ -141,7 +137,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           build-args: |
-            CACHE_BUST=${{ steps.week.outputs.key }}
+            CACHE_BUST=${{ github.run_id }}-${{ github.run_attempt }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
