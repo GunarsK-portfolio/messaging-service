@@ -60,7 +60,7 @@ tasks:
   dev:install-tools:
     desc: Install development and CI tools
     cmds:
-      - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.5.0
+      - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.1
       - go install golang.org/x/vuln/cmd/govulncheck@latest
       - go install github.com/securego/gosec/v2/cmd/gosec@latest
       - go install golang.org/x/tools/cmd/goimports@latest
@@ -110,6 +110,11 @@ tasks:
     cmds:
       - govulncheck ./...
 
+  ineffassign:
+    desc: Check for ineffective assignments
+    cmds:
+      - ineffassign ./...
+
   # Linting
   lint:markdown:
     desc: Lint Markdown files
@@ -118,13 +123,15 @@ tasks:
 
   # CI/CD
   ci:all:
-    desc: Run all CI checks (format, tidy, lint, vet, test, vuln, lint:markdown)
+    desc: Run all CI checks (format, tidy, lint, vet, test, ineffassign, vuln, gosec, lint:markdown)
     cmds:
       - task: format
       - task: tidy
       - task: lint
       - task: vet
       - task: test
+      - task: ineffassign
       - task: security:vuln
+      - task: security:scan
       - task: lint:markdown
       - echo "All CI checks passed!"

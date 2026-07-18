@@ -19,7 +19,7 @@ email notifications via AWS SES.
 
 ## Tech Stack
 
-- **Language**: Go 1.26.4
+- **Language**: Go 1.26.5
 - **Queue**: RabbitMQ
 - **Database**: PostgreSQL (GORM)
 - **Email**: AWS SES (LocalStack for local dev)
