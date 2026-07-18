@@ -17,7 +17,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o worker ./cmd/worker
 
 # Production stage
-FROM alpine:3.23.4
+FROM alpine:3.24.1
 
 # Security update - CACHE_BUST is set by CI to force fresh apk upgrade
 ARG CACHE_BUST
