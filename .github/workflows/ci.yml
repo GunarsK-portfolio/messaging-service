@@ -148,7 +148,7 @@ jobs:
           format: 'sarif'
           output: 'trivy-results.sarif'
           exit-code: '0'
-          version: 'v0.73.0'
+          version: 'v0.74.0'
 
       - name: Upload Trivy results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v4
@@ -164,7 +164,7 @@ jobs:
           format: 'table'
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
-          version: 'v0.73.0'
+          version: 'v0.74.0'
 
   # Job 5: Static analysis with gosec
   security-analysis:
@@ -212,7 +212,7 @@ jobs:
           fetch-depth: 0 # Full history for scanning
 
       - name: Run TruffleHog
-        uses: trufflesecurity/trufflehog@v3.96.0
+        uses: trufflesecurity/trufflehog@v3.97.4
         with:
           path: ./
           base: ""
